@@ -1,51 +1,44 @@
 #!/bin/bash
 
-echo "🔧 เริ่มติดตั้งระบบ RFID Reader..."
+set -e
 
-# === Step 1: อัปเดตและติดตั้ง Python venv ===
+echo "📦 อัปเดตแพ็กเกจ..."
 sudo apt update
-sudo apt install python3-venv -y
 
-# === Step 2: เตรียม path project ===
-PROJECT_DIR=~/python/RFID
-mkdir -p $PROJECT_DIR
-cd $PROJECT_DIR
+echo "🐍 ติดตั้ง python3-venv หากยังไม่มี..."
+sudo apt install -y python3-venv
 
-# === Step 3: สร้าง virtual environment ===
-python3 -m venv venv
-source venv/bin/activate
+echo "📁 สร้าง virtual environment หากยังไม่มี..."
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    echo "✅ สร้าง venv แล้ว"
+else
+    echo "ℹ️ พบ venv อยู่แล้ว ข้ามการสร้าง"
+fi
 
-# === Step 4: ติดตั้ง dependencies ใน virtualenv ===
-pip install --upgrade pip
-pip install pyserial aiohttp
+echo "🔗 เพิ่ม auto activate ใน ~/.bashrc หากยังไม่มี..."
+ACTIVATE_LINE="source $(pwd)/venv/bin/activate"
+if ! grep -Fxq "$ACTIVATE_LINE" ~/.bashrc; then
+    echo "$ACTIVATE_LINE" >> ~/.bashrc
+    echo "✅ เพิ่มบรรทัด activate แล้ว"
+else
+    echo "ℹ️ มีบรรทัด activate อยู่แล้ว"
+fi
 
-# === Step 5: เตรียม log directory ===
+echo "📁 สร้าง log directory หากยังไม่มี..."
 sudo mkdir -p /var/log/rfid
-sudo chown $USER:$USER /var/log/rfid
+sudo chown "$USER":"$USER" /var/log/rfid
 
-# === Step 6: สร้างไฟล์ Systemd Service ===
-SERVICE_FILE=/etc/systemd/system/rfid-reader.service
+echo "⚙️ ติดตั้ง systemd service หากยังไม่มี..."
+SERVICE_FILE="/etc/systemd/system/rfid-reader.service"
+if [ ! -f "$SERVICE_FILE" ]; then
+    sudo cp rfid-reader.service "$SERVICE_FILE"
+    sudo systemctl daemon-reload
+    sudo systemctl enable rfid-reader.service
+    echo "✅ ติดตั้ง service แล้ว"
+else
+    echo "ℹ️ พบ service อยู่แล้ว ข้ามการติดตั้ง"
+fi
 
-sudo tee $SERVICE_FILE > /dev/null <<EOF
-[Unit]
-Description=RFID Reader Async Service
-After=network.target
-
-[Service]
-ExecStart=~/python/RFID/venv/bin/python ~/python/RFID/rfid_reader_asyncio_log_dedup.py
-WorkingDirectory=~/python/RFID
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-User=$USER
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# === Step 7: Reload systemd และ enable service ===
-sudo systemctl daemon-reexec
-sudo systemctl daemon-reload
-sudo systemctl enable rfid-reader.service
-
-echo "✅ ติดตั้งเสร็จสมบูรณ์! รันด้วย: sudo systemctl start rfid-reader.service"
+echo "✅ ติดตั้งเสร็จสมบูรณ์!"
+echo "💡 เริ่มใช้งานด้วย: sudo systemctl start rfid-reader.service"
